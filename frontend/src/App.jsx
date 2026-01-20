@@ -2,11 +2,16 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
 
+// 🔗 BACKEND URL (CHANGE THIS TO YOUR RENDER URL)
+const API_BASE = "https://speech-to-text-backend-5uax.onrender.com";
+
 function App() {
+  // 🔐 Auth states
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // 🎙 App states
   const [audioFile, setAudioFile] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [history, setHistory] = useState([]);
@@ -14,31 +19,42 @@ function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // 🔄 Check logged-in user
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
   }, []);
 
+  // 📜 Fetch history
   const fetchHistory = async () => {
-    const res = await axios.get("http://localhost:5000/transcriptions");
-    setHistory(res.data);
+    try {
+      const res = await axios.get(`${API_BASE}/transcriptions`);
+      setHistory(res.data);
+    } catch (err) {
+      console.error("Failed to fetch history");
+    }
   };
 
   useEffect(() => {
     if (user) fetchHistory();
   }, [user]);
 
-  // Auth
+  // 🔐 AUTH
   const handleSignup = async () => {
-    setError(""); setSuccess("");
+    setError("");
+    setSuccess("");
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) setError(error.message);
     else setSuccess("Signup successful. Please login.");
   };
 
   const handleLogin = async () => {
-    setError(""); setSuccess("");
+    setError("");
+    setSuccess("");
     const { data, error } = await supabase.auth.signInWithPassword({
-      email, password,
+      email,
+      password,
     });
     if (error) setError(error.message);
     else setUser(data.user);
@@ -49,22 +65,25 @@ function App() {
     setUser(null);
   };
 
-  // Upload
+  // 🎧 File selection
   const handleFileChange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const ok = ["audio/mpeg", "audio/wav", "audio/mp3"];
-    if (!ok.includes(f.type)) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowed = ["audio/mpeg", "audio/wav", "audio/mp3"];
+    if (!allowed.includes(file.type)) {
       setError("Only MP3 or WAV files allowed");
       return;
     }
+
     setError("");
-    setAudioFile(f);
+    setAudioFile(file);
   };
 
+  // 🚀 Upload + Transcribe
   const handleUpload = async () => {
     if (!audioFile) {
-      setError("Upload an audio file");
+      setError("Please upload an audio file");
       return;
     }
 
@@ -73,34 +92,34 @@ function App() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.append("audio", audioFile);
+    const formData = new FormData();
+    formData.append("audio", audioFile);
 
-    const res = await axios.post(
-      "http://localhost:5000/upload",
-      fd,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
+    try {
+      const res = await axios.post(
+        `${API_BASE}/upload`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
 
-    setTranscript(res.data.text);
-    setSuccess("Transcription successful");
-    fetchHistory();
-    setLoading(false);
+      setTranscript(res.data.text);
+      setSuccess("Transcription successful");
+      fetchHistory();
+    } catch (err) {
+      setError("Speech to text failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 🔴 CLEAR HISTORY (CONFIRMED WORKING)
+  // 🗑 Clear history
   const clearHistory = async () => {
     if (!window.confirm("Delete all transcription history?")) return;
-
-    const res = await axios.delete(
-      "http://localhost:5000/transcriptions"
-    );
-
-    console.log(res.data); // shows deletedCount
+    await axios.delete(`${API_BASE}/transcriptions`);
     setHistory([]);
   };
 
-  // Login screen
+  // 🔐 LOGIN / SIGNUP SCREEN
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -143,7 +162,7 @@ function App() {
     );
   }
 
-  // Main app
+  // 🎙 MAIN APP
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 relative">
       <button
@@ -194,9 +213,7 @@ function App() {
         </div>
 
         {history.length === 0 && (
-          <p className="text-sm text-gray-500 mt-2">
-            No history yet
-          </p>
+          <p className="text-sm text-gray-500 mt-2">No history yet</p>
         )}
 
         {history.map((h) => (
