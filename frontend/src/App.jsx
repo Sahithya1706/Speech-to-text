@@ -1,14 +1,213 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { supabase } from "./supabase";
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [audioFile, setAudioFile] = useState(null);
+  const [transcript, setTranscript] = useState("");
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  const fetchHistory = async () => {
+    const res = await axios.get("http://localhost:5000/transcriptions");
+    setHistory(res.data);
+  };
+
+  useEffect(() => {
+    if (user) fetchHistory();
+  }, [user]);
+
+  // Auth
+  const handleSignup = async () => {
+    setError(""); setSuccess("");
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) setError(error.message);
+    else setSuccess("Signup successful. Please login.");
+  };
+
+  const handleLogin = async () => {
+    setError(""); setSuccess("");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email, password,
+    });
+    if (error) setError(error.message);
+    else setUser(data.user);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  // Upload
+  const handleFileChange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const ok = ["audio/mpeg", "audio/wav", "audio/mp3"];
+    if (!ok.includes(f.type)) {
+      setError("Only MP3 or WAV files allowed");
+      return;
+    }
+    setError("");
+    setAudioFile(f);
+  };
+
+  const handleUpload = async () => {
+    if (!audioFile) {
+      setError("Upload an audio file");
+      return;
+    }
+
+    setLoading(true);
+    setTranscript("");
+    setError("");
+    setSuccess("");
+
+    const fd = new FormData();
+    fd.append("audio", audioFile);
+
+    const res = await axios.post(
+      "http://localhost:5000/upload",
+      fd,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+
+    setTranscript(res.data.text);
+    setSuccess("Transcription successful");
+    fetchHistory();
+    setLoading(false);
+  };
+
+  // 🔴 CLEAR HISTORY (CONFIRMED WORKING)
+  const clearHistory = async () => {
+    if (!window.confirm("Delete all transcription history?")) return;
+
+    const res = await axios.delete(
+      "http://localhost:5000/transcriptions"
+    );
+
+    console.log(res.data); // shows deletedCount
+    setHistory([]);
+  };
+
+  // Login screen
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded shadow w-full max-w-sm">
+          <h2 className="text-xl font-bold text-center mb-4">
+            Login / Signup
+          </h2>
+
+          <input
+            className="w-full border p-2 mb-2 rounded"
+            placeholder="Email"
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            type="password"
+            className="w-full border p-2 mb-4 rounded"
+            placeholder="Password"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button
+            onClick={handleLogin}
+            className="w-full bg-blue-600 text-white py-2 rounded mb-2"
+          >
+            Login
+          </button>
+
+          <button
+            onClick={handleSignup}
+            className="w-full bg-gray-600 text-white py-2 rounded"
+          >
+            Sign Up
+          </button>
+
+          {error && <p className="text-red-500 mt-2">{error}</p>}
+          {success && <p className="text-green-500 mt-2">{success}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // Main app
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <h1 className="text-4xl font-bold text-blue-600">
-        Speech to Text App
-      </h1>
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 relative">
+      <button
+        onClick={handleLogout}
+        className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded"
+      >
+        Logout
+      </button>
+
+      <div className="bg-white p-8 rounded-2xl shadow w-full max-w-2xl">
+        <h1 className="text-3xl font-bold text-center mb-4">
+          🎙️ Speech to Text
+        </h1>
+
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={handleFileChange}
+          className="w-full border p-2 rounded mb-3"
+        />
+
+        <button
+          onClick={handleUpload}
+          disabled={loading}
+          className="w-full bg-blue-600 text-white py-2 rounded"
+        >
+          {loading ? "Converting..." : "Convert to Text"}
+        </button>
+
+        {error && <p className="text-red-500 mt-2 text-center">{error}</p>}
+        {success && <p className="text-green-500 mt-2 text-center">{success}</p>}
+
+        <textarea
+          rows="4"
+          readOnly
+          value={transcript}
+          className="w-full border p-2 rounded mt-4"
+        />
+
+        <div className="mt-6 flex justify-between items-center">
+          <h2 className="text-lg font-semibold">📜 History</h2>
+          <button
+            onClick={clearHistory}
+            className="bg-red-600 text-white px-3 py-1 rounded"
+          >
+            Clear History
+          </button>
+        </div>
+
+        {history.length === 0 && (
+          <p className="text-sm text-gray-500 mt-2">
+            No history yet
+          </p>
+        )}
+
+        {history.map((h) => (
+          <div key={h._id} className="border rounded p-3 mt-2">
+            <p className="text-xs text-gray-500">
+              {new Date(h.createdAt).toLocaleString()}
+            </p>
+            <p>{h.text}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
