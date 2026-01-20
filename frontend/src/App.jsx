@@ -2,16 +2,16 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
 
-// 🔗 BACKEND URL (CHANGE THIS TO YOUR RENDER URL)
+// 🔗 BACKEND URL (REPLACE WITH YOUR RENDER URL)
 const API_BASE = "https://speech-to-text-backend-5uax.onrender.com";
 
 function App() {
-  // 🔐 Auth states
+  // 🔐 Auth
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 🎙 App states
+  // 🎙 App state
   const [audioFile, setAudioFile] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [history, setHistory] = useState([]);
@@ -19,7 +19,7 @@ function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // 🔄 Check logged-in user
+  // 🔄 Get logged-in user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
@@ -31,7 +31,7 @@ function App() {
     try {
       const res = await axios.get(`${API_BASE}/transcriptions`);
       setHistory(res.data);
-    } catch (err) {
+    } catch {
       console.error("Failed to fetch history");
     }
   };
@@ -40,7 +40,7 @@ function App() {
     if (user) fetchHistory();
   }, [user]);
 
-  // 🔐 AUTH
+  // 🔐 Auth handlers
   const handleSignup = async () => {
     setError("");
     setSuccess("");
@@ -65,7 +65,7 @@ function App() {
     setUser(null);
   };
 
-  // 🎧 File selection
+  // 🎧 File handling
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -80,7 +80,7 @@ function App() {
     setAudioFile(file);
   };
 
-  // 🚀 Upload + Transcribe
+  // 🚀 Upload & transcribe
   const handleUpload = async () => {
     if (!audioFile) {
       setError("Please upload an audio file");
@@ -92,10 +92,10 @@ function App() {
     setError("");
     setSuccess("");
 
-    const formData = new FormData();
-    formData.append("audio", audioFile);
-
     try {
+      const formData = new FormData();
+      formData.append("audio", audioFile);
+
       const res = await axios.post(
         `${API_BASE}/upload`,
         formData,
@@ -105,8 +105,8 @@ function App() {
       setTranscript(res.data.text);
       setSuccess("Transcription successful");
       fetchHistory();
-    } catch (err) {
-      setError("Speech to text failed");
+    } catch {
+      setError("Speech to text failed. Try again.");
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ function App() {
     setHistory([]);
   };
 
-  // 🔐 LOGIN / SIGNUP SCREEN
+  // 🔐 LOGIN SCREEN
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -180,6 +180,7 @@ function App() {
         <input
           type="file"
           accept="audio/*"
+          disabled={loading}
           onChange={handleFileChange}
           className="w-full border p-2 rounded mb-3"
         />
@@ -187,9 +188,13 @@ function App() {
         <button
           onClick={handleUpload}
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded"
+          className={`w-full py-2 rounded text-white ${
+            loading
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
-          {loading ? "Converting..." : "Convert to Text"}
+          {loading ? "🎧 Converting, please wait..." : "Convert to Text"}
         </button>
 
         {error && <p className="text-red-500 mt-2 text-center">{error}</p>}
@@ -212,18 +217,20 @@ function App() {
           </button>
         </div>
 
-        {history.length === 0 && (
-          <p className="text-sm text-gray-500 mt-2">No history yet</p>
+        {history.length === 0 ? (
+          <p className="text-sm text-gray-500 mt-2 italic">
+            No transcriptions yet. Upload an audio file 👆
+          </p>
+        ) : (
+          history.map((h) => (
+            <div key={h._id} className="border rounded p-3 mt-2 bg-gray-50">
+              <p className="text-xs text-gray-500">
+                {new Date(h.createdAt).toLocaleString()}
+              </p>
+              <p className="mt-1">{h.text}</p>
+            </div>
+          ))
         )}
-
-        {history.map((h) => (
-          <div key={h._id} className="border rounded p-3 mt-2">
-            <p className="text-xs text-gray-500">
-              {new Date(h.createdAt).toLocaleString()}
-            </p>
-            <p>{h.text}</p>
-          </div>
-        ))}
       </div>
     </div>
   );
