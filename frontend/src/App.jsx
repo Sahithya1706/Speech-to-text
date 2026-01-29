@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
 
-// 🔗 BACKEND URL (REPLACE WITH YOUR RENDER URL)
+// 🔗 BACKEND URL
 const API_BASE = "https://speech-to-text-backend-5uax.onrender.com";
 
 function App() {
@@ -26,13 +26,14 @@ function App() {
     });
   }, []);
 
-  // 📜 Fetch history
+  // 📜 Fetch history (SAFE VERSION)
   const fetchHistory = async () => {
     try {
       const res = await axios.get(`${API_BASE}/transcriptions`);
       setHistory(res.data);
     } catch {
-      console.error("Failed to fetch history");
+      console.warn("History API not reachable yet");
+      // ❌ DO NOT show error on UI
     }
   };
 
@@ -96,11 +97,9 @@ function App() {
       const formData = new FormData();
       formData.append("audio", audioFile);
 
-      const res = await axios.post(
-        `${API_BASE}/upload`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+      const res = await axios.post(`${API_BASE}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       setTranscript(res.data.text);
       setSuccess("Transcription successful");
